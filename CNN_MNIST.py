@@ -104,6 +104,19 @@ class NetSeq(nn.Module):
 
 from time import time
 
+def save_checkpoint(checkpoint_path, model, optimizer):
+    state = {
+            'state_dict': model.state_dict(),
+            'optimizer' : optimizer.state_dict()}
+    torch.save(state, checkpoint_path)
+    print('model saved to %s' %checkpoint_path)
+
+def load_checkpoint(checkpoint_path, model, optimizer):
+    state = torch.load(checkpoint_path)
+    model.load_state_dict(state['state_dict'])
+    optimizer.load_state_dict(state['optimizer'])
+    print('model loaded from %s' %checkpoint_path)
+
 def train(epoch, log_interval = 100):
     model.train()
     iteration = 0
@@ -129,6 +142,30 @@ def train(epoch, log_interval = 100):
         print('{:.2f}s'.format(end-start))
         test() # evaluate at the end of epoch
 
+def train_with_checkpoint(epoch, save_internal, log_internal = 100):
+    model.train()
+    iteration = 0
+    for ep in range(epoch):
+        start = time()
+        for batch_idx, (data, label) in enumerate(trainset_loader):
+            data, label = data.to(device), label.to(device)
+            optimizer.zero_grad()
+            output = model(data)
+            loss = F.nll_loss(output, label)
+            loss.backward()
+            optimizer.step()
+            if iteration % log_internal == 0:
+                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                        ep, batch_idx * len(data), len(trainset_loader.dataset),
+                        100. * batch_idx / len(trainset_loader), loss.item()))
+            if iteration % save_internal == 0 and iteration > 0:
+                save_checkpoint('mnist-%i.pth' % iteration, model, optimizer)
+            iteration += 1
+        
+        end = time()
+        print('{:.2f}s'.format(end - start))
+        save_checkpoint('mnist-%i.pth' % iteration, model, optimizer)
+            
 def test():
     model.eval()
     test_loss = 0
@@ -146,6 +183,8 @@ def test():
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(testset_loader.dataset),
         100. * correct / len(testset_loader.dataset)))
+
+
 """ 
 Avoid setting num_workers > 0 on Windows
 If you have to, wrap the main code inside statement: if __name__ == '__main__': 
@@ -153,9 +192,9 @@ Reference; https://discuss.pytorch.org/t/brokenpipeerror-errno-32-broken-pipe-wh
 """
 
 if __name__ == '__main__':
-    trainset = MNIST(root='C:/Users/shian/Desktop/mnist_png/training', transform=transforms.ToTensor())
-    trainset_loader = DataLoader(trainset, batch_size = 64, shuffle = True, num_workers = 2)                      #Couldn't use num_workers > 0
-    testset = MNIST(root='C:/Users/shian/Desktop/mnist_png/testing', transform=transforms.ToTensor())
+    trainset = MNIST(root='C:/Users/shian/Documents/ECE/Deep Learning Material/mnist_png/training', transform=transforms.ToTensor())
+    trainset_loader = DataLoader(trainset, batch_size = 64, shuffle = True, num_workers = 2)
+    testset = MNIST(root='C:/Users/shian/Documents/ECE/Deep Learning Material/mnist_png/testing', transform=transforms.ToTensor())
     testset_loader = DataLoader(testset, batch_size = 64, shuffle = True, num_workers = 2)
     
     print(len(trainset))
@@ -169,7 +208,13 @@ if __name__ == '__main__':
     model = NetSeq().to(device)
     optimizer = optim.SGD(model.parameters(), lr = 1e-3, momentum=0.9)
 
-    train(5)
+    train_with_checkpoint(5, save_internal=500, log_internal=100)
+    
+    model = NetSeq().to(device)
+    optimizer = optim.SGD(model.parameters(), lr = 1e-3, momentum=0.9)
+    
+    load_checkpoint('mnist-4690.pth', model, optimizer)
+    test()
 
 
 
