@@ -12,6 +12,9 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+
+import matplotlib.pyplot as plt
+import numpy as np
 import collections
 from time import time
 
@@ -40,12 +43,36 @@ class Net(nn.Module):
         x = x.view(-1, 16 * 5 * 5)
         x = self.fc_layers(x)
         return x
+    
+def imshow(img):
+    img = img / 2 + 0.5 #Unnormalize the image
+    img = img.numpy()
+    """
+    In pytorch, the order of dimension is channel*width*height, but
+                     in matplotlib, it is width*height*channel
+    """
+    plt.imshow(np.transpose(img, (1, 2, 0)))
+    plt.show()
 
-def train_with_checkpoint(epoch, save_internal, log_internal = 100):
+def save_checkpoint(checkpoint_path, model, optimizer):
+    state = {
+            'state_dict': model.state_dict(),
+            'optimizer': optimizer.state_dict()}
+    torch.save(state, checkpoint_path)
+    print('model saved to %s' %checkpoint_path)
+
+def load_checkpoint(checkpoint_path, model, optimizer):
+    state = torch.load(checkpoint_path)
+    model.load_state_dict(state['state_dict'])
+    optimizer.load_state_dict(state['optimizer'])
+    print('model loaded from %s' %checkpoint_path)
+    
+def train_with_checkpoint(epoch, save_internal, log_internal = 1250):
     net.train()
     iteration = 0
     for ep in range(epoch):
         start = time()
+        running_loss = 0.0
         for batch_idx, (data, label) in enumerate(trainset_loader):
             data, label = data.to(device), label.to(device)
             
@@ -55,15 +82,47 @@ def train_with_checkpoint(epoch, save_internal, log_internal = 100):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if iteration % log_internal == 0:
-                print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                        ep, batch_idx * len(data), len(trainset_loader.dataset),
-                        100. * batch_idx / len(trainset_loader), loss.item()))
-        
+            
+            running_loss += loss.item()
+            #print every x mini-batches (x = log_internal)
+            if iteration % log_internal == (log_internal - 1):
+                print('Train Epoch: {} [{} * {} = {}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                        ep, batch_idx, len(data), batch_idx * len(data), len(trainset_loader.dataset),
+                        100. * batch_idx / len(trainset_loader), running_loss / log_internal))
+                running_loss = 0.0
+            iteration += 1
+            
         end = time()
         print('{:.2f}s'.format(end-start))
-        
+
+def test():
+    #will notify all your layers that you are in eval mode, that way, batchnorm or dropout layers will work in eval mode instead of training mode.
+    net.eval()
+    test_loss = 0.0
+    correct_number = 0
+    average_loss = 0.0
+    #impacts the autograd engine and deactivate it. It will reduce memory usage and speed up computations but you won’t be able to backprop (which you don’t want in an eval script).
+    with torch.no_grad(): 
+        for data, label in enumerate(testset_loader):
+            data, label = data.to(device), label.to(device)
+            
+            output = net(data)
+            test_loss = F.cross_entropy(output, label)
+            _, predicted = torch.max(output, 1) #Returns a named tuple (values, indices) indices is index location
+            correct_number += (predicted == lables).sum().item()
+            
+            average_loss += test_loss
+            
+        average_loss /= len(testset_loader.dataset)
+        print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+                average_loss, correct_number, len(testset_loader.dataset),
+                100. * correct_number / len(testset_loader.dataset)))
+    
 if __name__ == '__main__':
+    """
+    The output of torchvision datasets are PILImage images of range [0, 1]. 
+    We transform them to Tensors of normalized range [-1, 1].
+    """
     transform = transforms.Compose(
             [transforms.ToTensor(),
              transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
@@ -74,6 +133,11 @@ if __name__ == '__main__':
     
     classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+    
+    data_sample = iter(trainset_loader)
+    images, lables = data_sample.next() #One batch has four images when you set the Dataloader
+    imshow(torchvision.utils.make_grid(images))
+
     
     print('Number of Traning Sample: %i' %len(trainset))
     print('Number of Train Batch Size: %i' %len(trainset_loader))
@@ -88,8 +152,8 @@ if __name__ == '__main__':
     net = Net().to(device)
     print(net)
               
-    optimizer = optim.SGD(net.parameters(), lr = 0.01, momentum=0.9)
-    train_with_checkpoint(5, save_internal=500)
+    optimizer = optim.SGD(net.parameters(), lr = 0.0001, momentum=0.9)
+    train_with_checkpoint(2, save_internal=500)
     
 
     
