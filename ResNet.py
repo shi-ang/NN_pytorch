@@ -2,10 +2,11 @@
 """
 Created on Tue May 21 14:46:50 2019
 
+Rewrite the torchvision.models.resnet package
+
 @author: shian
 """
 
-import torch
 import torch.nn as nn
 import torch.utils.model_zoo as model_zoo
 import collections
@@ -33,6 +34,7 @@ class BasicBlock(nn.Module):
                 ]))
         self.relu2 = nn.ReLU()
         self.downsample = downsample
+        print('Use BasicBlock')
     
     def forward(self, x):
         x = self.res_path(x)
@@ -66,6 +68,7 @@ class Bottleneck(nn.Module):
                 ]))
         self.relu3 = nn.ReLU()
         self.downsample = downsample
+        print('Use Bottleneck')
         
     def forward(self, x):
         x = self.res_path(x)
@@ -79,9 +82,9 @@ class Bottleneck(nn.Module):
         x = self.relu3(x)
         return x
     
-class ResNet1(nn.Module):
+class ResNet(nn.Module):
     def __init__(self, blocktype, layers, num_classes = 100, zero_init_residual = False):
-        super(ResNet1, self).__init__()
+        super(ResNet, self).__init__()
         self.inplanes = 64
         self.pre_layers = nn.Sequential(collections.OrderedDict([
                 ('conv1', nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3, 
@@ -96,6 +99,9 @@ class ResNet1(nn.Module):
         self.layer4 = self._make_layers(blocktype, 512, layers[3], stride = 2)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * blocktype.expansion, num_classes)
+        print('Use ResNet')
+        
+        # Discard the initialization
         
     def _make_layers(self, blocktype, internal_planes, blocks_number, stride = 1):
         downsample = None
@@ -111,6 +117,11 @@ class ResNet1(nn.Module):
                                      downsample = downsample))
         for _ in range(1, blocks_number):
             layers.append(blocktype(self.inplanes, internal_planes))
+        """
+        Use each element in list layers as the arguments in the Method
+        Equals to nn.Sequential(layers[0], layers[1], layer[2], ...)
+        """
+        return nn.Sequential(*layers)
     
     def forward(self, x):
         x = self.pre_layers(x)
@@ -123,7 +134,8 @@ class ResNet1(nn.Module):
         x = self.fc(x)
         return x
         
-model = ResNet1(BasicBlock, [2, 2, 2, 2])
+# Compare this class to the library
+model = ResNet(BasicBlock, [2, 2, 2, 2]) #resnet18
 print(model)
 
 model1 = resnet.resnet18()
