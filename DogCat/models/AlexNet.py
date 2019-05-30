@@ -8,7 +8,7 @@ Created on Tue May 28 17:04:16 2019
 
 import torch.nn as nn
 import collections
-import BasicModule
+from models.BasicModule import BasicModule
 
 class AlexNet(BasicModule):
     """

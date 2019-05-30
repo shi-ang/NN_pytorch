@@ -5,7 +5,6 @@ Created on Thu May 23 16:24:14 2019
 @author: shian
 """
 
-import numpy as np
 import os
 from PIL import Image
 import torch.utils.data as data

@@ -23,7 +23,7 @@ class BasicModule(nn.Module):
         # self.load_state_dict(path) is wrong
         self.load_state_dict(torch.load(path))
         
-    def save(self, name):
+    def save(self, name = None):
         if name is None:
             prefix = 'checkpoints/' + self.model_name + '_'
             # strftime convert data and time to string
